@@ -1,0 +1,123 @@
+
+#here I created the entire code just for Baden-Württemberg
+
+
+dat <- read.table("RKI_COVID19.csv", header=TRUE, sep=",")
+bw<-dat[dat$IdBundesland == 8,]
+
+str(bw)
+
+Landkreis2Land <- dplyr::select(bw, IdLandkreis, Landkreis, Bundesland) %>%
+  group_by(IdLandkreis) %>% summarise(Landkreis = first(Landkreis) ,Bundesland = first(Bundesland))
+Landkreis2Land$Landkreis_char <- as.character(Landkreis2Land$Landkreis)
+
+unique_dates <- length(unique(bw$Refdatum))
+time_diff <- max(ymd_hms(bw$Refdatum)) - min(ymd_hms(bw$Refdatum))
+time_diff
+
+head(bw$Meldedatum)
+
+bw$Refdatum<-ymd_hms(bw$Refdatum)
+bw$Meldedatum<-ymd_hms(bw$Meldedatum)
+
+plot(xtabs( ~ Refdatum, data = dat%>%dplyr::filter(Landkreis== "SK Heidelberg")),
+     xlab = "Time in days (RefDatum)",
+     ylab = "Amount of events")
+
+bw%>%group_by(IdBundesland)%>%summarise(n())
+length(unique(bw$IdLandkreis))
+
+
+datAgg <- bw %>% group_by(Landkreis,  Refdatum) %>%
+  summarize(sumCount = sum(AnzahlFall, na.rm = TRUE), 
+            sumDeath = sum(AnzahlTodesfall, na.rm = TRUE))
+summary(datAgg)
+
+length(unique(datAgg$Refdatum))
+length(unique(datAgg$Landkreis))
+
+complete_ts <- length(unique(datAgg$Refdatum)) * length(unique(datAgg$Landkreis))
+miss_ts <- length(unique(datAgg$Refdatum)) * length(unique(datAgg$Landkreis)) -  nrow(datAgg)
+
+complete_ts
+nrow(datAgg)
+plot(xtabs(~ Landkreis, datAgg),
+     xlab = "BW",
+     ylab = "Amount of events")
+
+datAggCases_wideByDistrict <-
+  arrange(datAgg, Refdatum, .by_group = TRUE) %>%
+  pivot_wider(names_from = Landkreis,
+              values_from = sumCount,
+              id_cols = Refdatum)
+
+datAggCases_long <-
+  pivot_longer(datAggCases_wideByDistrict,
+               cols = -Refdatum,
+               names_to = "Landkreis")
+
+
+datAggCases_long$sumCount <-
+  replace_na(datAggCases_long$value, replace = 0)
+
+
+datAggCases_long<-
+  left_join(datAggCases_long,
+            Landkreis2Land,
+            by = c("Landkreis" = "Landkreis_char")) %>%
+  dplyr::select(-c(Landkreis.y, value))
+
+
+
+ggplot(datAggCases_long, aes(x=Refdatum, y= sumCount)) +
+  geom_line() + facet_wrap(~Bundesland)
+
+
+??ggplot
+datAggCases_long <- datAggCases_long %>% group_by(Landkreis) %>%
+  arrange(Refdatum) %>%
+  summarise(
+    sumCountRollMean7 = rollapply(
+      sumCount,
+      width = 7,
+      FUN = mean,
+      na.rm = TRUE,
+      fill = NA
+    ),
+    sumCountSum7 = rollapply(
+      sumCount,
+      width = 7,
+      FUN = sum,
+      align = "right",
+      partial = FALSE,
+      fill = NA,
+      na.rm = TRUE
+    ),
+    # first 7day window of i+1:i-5
+    sumOverlap1 = rollapply( 
+      sumCount,
+      width = list(1:-5),
+      FUN = sum,
+      align = "right",
+      partial = FALSE,
+      fill = NA,
+      na.rm = TRUE
+    ),
+    # second 7day window of i-3:i-9
+    sumOverlap2 = rollapply(
+      sumCount,
+      width = list(-3:-9),
+      FUN = sum,
+      align = "right",
+      partial = FALSE,
+      fill = NA,
+      na.rm = TRUE
+    ),
+    Refdatum = Refdatum
+  ) %>%
+  mutate(R0_7 = case_when(
+    is.infinite(round(sumOverlap1 / sumOverlap2, digits = 4)) == TRUE ~ as.numeric(NA),
+    TRUE ~ round(sumOverlap1 / sumOverlap2, digits = 4)
+  )) %>%
+  left_join(datAggCases_long, by = c("Landkreis", "Refdatum")) %>%  
+  dplyr::select(-c(sumOverlap1, sumOverlap2))
