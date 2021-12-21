@@ -1,0 +1,73 @@
+
+
+
+#Initial part of the code is the same as that from original code shared.
+Landkreis2Lan <- dplyr::select(dat, IdLandkreis, Landkreis, Bundesland) %>%
+  group_by(IdLandkreis) %>% summarise(Landkreis = first(Landkreis) ,Bundesland = first(Bundesland))
+Landkreis2Lan$IdLandkreis_char <- as.character(Landkreis2Lan$IdLandkreis)
+
+nrow(Landkreis2Land)
+
+head(dat$Meldedatum)
+tail(dat$Meldedatum)
+unique_dates <- length(unique(dat$Refdatum))
+time_diff <- max(ymd_hms(dat$Refdatum)) - min(ymd_hms(dat$Refdatum))
+time_diff
+
+
+datAgg <- dat %>% group_by(IdLandkreis,  Refdatum) %>%
+  summarize(sumCount = sum(AnzahlFall, na.rm = TRUE), 
+            sumDeath = sum(AnzahlTodesfall, na.rm = TRUE),
+            Landkreis = first(Landkreis) ,Bundesland = first(Bundesland))
+summary(datAgg)
+
+
+complete_ts <- length(unique(datAgg$Refdatum)) * length(unique(datAgg$IdLandkreis))
+miss_ts <- length(unique(datAgg$Refdatum)) * length(unique(datAgg$IdLandkreis)) -  nrow(datAgg)
+
+
+datAggCases_wideByDistrict <-
+  arrange(datAgg, Refdatum, .by_group = TRUE) %>%
+  pivot_wider(names_from = IdLandkreis,
+              values_from = sumCount,
+              id_cols = Refdatum)
+
+
+datAggCases_long <-
+  pivot_longer(datAggCases_wideByDistrict,
+               cols = -Refdatum,
+               names_to = "IdLandkreis")
+head(datAggCases_long)
+
+
+datAggCases_long$sumCount <-replace_na(datAggCases_long$value, replace = 0)
+
+datAggCases_long <-left_join(datAggCases_long,Landkreis2Lan,by = c("IdLandkreis" = "IdLandkreis_char")) %>%dplyr::select(-c(IdLandkreis.y, value))
+
+datAggCases_long$Refdatum<-as.Date(datAggCases_long$Refdatum)
+
+datAggCases_long<-datAggCases_long%>%
+          mutate(Refdat=format(Refdatum, "%Y-%m"))
+
+datAggCas<-datAggCases_long%>% group_by(Bundesland, Refdat)%>%
+               summarise(monthly= sum(sumCount))
+datAggCas<-aggregate(monthly ~ month + year, datAggCas,FUN = sum, data=subset(datAggCas, Bundesland ="Baden-WÃ¼rttemberg"))
+timese<-ts(datAggCas$monthly,start = c(2020,1),end = c(2021, 10), frequency = 12 )
+
+
+hist(datAggCas$monthly) #tried creating a histogram in multiple ways but it did not work.
+plot(timese) #tried using the ts function to create a time series
+corrplot(corr = datAggCas$monthly) #also thought it would be useful to create a correlation plot
+
+#none of the plots below gave the desired results, I tried them with several combinations. 
+ggplot(subset(datAggCas, Bundesland =="Baden-WÃ¼rttemberg"),
+          aes(x=monthly, y=Refdat)) + geom_line(show.legend = FALSE) + facet_wrap()
+
+ggplot(datAggCas, aes(x=monthly, y= Refdat, colour=factor(Bundesland))) +
+  geom_line(show.legend = FALSE) + facet_wrap(~Bundesland)
+
+
+autoplot(datAggCas)+ xlab(Refdat)+ylab(monthly)
+
+datAggCases_long$year<-strftime(datAggCases_long$Refdatum, "%Y")
+datAggCases_long$month<-strftime(datAggCases_long$Refdatum, "%m")
