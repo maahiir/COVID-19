@@ -1,0 +1,95 @@
+knitr::opts_chunk$set(echo = TRUE)
+require(sp)
+require(spdep)
+require(sf)
+require(lwgeom) # for st_make_valid
+require(RColorBrewer) # for nice color ramps
+require(tidyverse)
+require(tmap)
+require(tripack)
+require(ggplot2)
+require(ggpubr)
+require(jtools)
+require(smerc) 
+require(gstat)
+require(knitr)
+require(MASS)
+require(corrplot)
+require(tmap)
+require(animation)
+require(zoo)
+require(readODS)
+require(tidyquant)
+require(spdep)
+require(tmap)
+require(tidyquant)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=FALSE)
+opts_knit$set(width=75)
+
+
+cor <- read_csv("~/RA/Presentation/cor.csv")
+
+inc_std<-cor
+inc_std<-cor%>%mutate_all(~(scale(.)%>%as.vector)) 
+
+inc_std$IdLandkreis<-c(8111,8115,8116,8117,8118,8119,8121,8125,8126,8127,8128,8135,8136,8211,8212,8215,8216,8221,
+                       8222,8225,8226,8231,8235,8236,8237,8311,8315,8316,8317,8325,8326,8327,8335,8336,8337,8415,
+                       8416,8417,8421,8425,8426,8435,8436,8437) #adding the IdLandkreis variable
+
+inc_std$IdLandkreis_char<- str_pad(inc_std$IdLandkreis, width = 5,
+                                   side = "left",
+                                   pad = "0")
+so<-inc_std[,c(10,18,22,23,30,31,32,33,35)]
+
+twe<- st_read("~/RA/Presentation/tweetWave.gpkg")
+wavereg<-left_join(twe,so, by = c("ARS" = "IdLandkreis_char"))
+
+#first wave regression
+reg2<-lm(meanSentiment_1~Stimmenanteile.AfD, data = wavereg)
+summary(reg2)
+
+reg3<-lm(meanSentiment_1~Laendlichkeit, data = wavereg)
+summary(reg3)
+
+
+reg3<-lm(meanSentiment_1~Landwirtschaftsflache, data = wavereg)
+summary(reg3)
+
+
+reg4<-lm(meanSentiment_1~Krankenhausbetten, data = wavereg)
+summary(reg4)
+
+
+reg5<-lm(meanSentiment_1~Allgemeinaerzte, data = wavereg)
+summary(reg5)
+
+
+reg6<-lm(meanSentiment_1~Internisten, data = wavereg)
+summary(reg6)
+
+
+reg7<-lm(meanSentiment_1~Kinderartze, data = wavereg)
+summary(reg7)
+
+
+reg8<-lm(meanSentiment_1~Einpendler, data = wavereg)
+summary(reg8)
+
+reg9<-lm(meanSentiment_1~Auspendler, data = wavereg)
+summary(reg9)
+
+reg10<-lm(meanSentiment_1~Asylbewerber, data = wavereg)
+summary(reg10)
+
+reg11<-lm(meanSentiment_1~Arbeitslosenquote, data = wavereg)
+summary(reg11)
+
+reg12<-lm(meanSentiment_1~`Beschaftigte mit Anforderungsniveau Fachkraft`, data = wavereg)
+summary(reg12)
+
+reg13<-lm(meanSentiment_1~`Beschaftigte mit akademischem Berufsabschluss`, data = wavereg)
+summary(reg13)
+
